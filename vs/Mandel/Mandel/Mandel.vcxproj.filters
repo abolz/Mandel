@@ -1,0 +1,64 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="src">
+      <UniqueIdentifier>{6be1a3f1-15c2-4854-827a-c14c080979fb}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\OpenGL">
+      <UniqueIdentifier>{fd0722a6-55b3-47e3-a233-7dd572d03958}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\Maps">
+      <UniqueIdentifier>{83b922e3-7548-486e-8999-9b7ed0659dca}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\..\..\src\OpenGL\gl_fallbacks.cpp">
+      <Filter>src\OpenGL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\src\OpenGL\OpenGL.cpp">
+      <Filter>src\OpenGL</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\src\Main.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\src\FPSCounter.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\..\..\src\OpenGL\gl_enums.h">
+      <Filter>src\OpenGL</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\OpenGL\gl_extensions.def.h">
+      <Filter>src\OpenGL</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\OpenGL\gl_fallbacks.h">
+      <Filter>src\OpenGL</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\OpenGL\gl_impl.h">
+      <Filter>src\OpenGL</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\OpenGL\gl_types.h">
+      <Filter>src\OpenGL</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\OpenGL\OpenGL.h">
+      <Filter>src\OpenGL</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\Mandel.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\FPSCounter.h">
+      <Filter>src</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\..\..\src\Maps\damien3.map">
+      <Filter>src\Maps</Filter>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <CudaCompile Include="..\..\..\src\Mandel.cu">
+      <Filter>src</Filter>
+    </CudaCompile>
+  </ItemGroup>
+</Project>
