@@ -1,3 +1,7 @@
 /.vscode/
 /bin/
 /ext/
+/vs/Mandel/.vs/
+/vs/Mandel/x64/
+/vs/Mandel/Mandel/*.pdb
+/vs/Mandel/Mandel/x64/
