@@ -1,0 +1,316 @@
+<html>
+
+<head>
+
+<script id="vert-shader" type="x-shader/x-vertex">
+precision highp float;
+
+attribute vec2 a_pos;
+
+void main() {
+  gl_Position = vec4(a_pos, 0.0, 1.0);
+}
+</script>
+
+<script id="frag-shader" type="x-shader/x-fragment">
+precision highp float;
+
+uniform vec2 u_image_size; // (in pixels)
+uniform vec3 u_plane;      // x,y: position; z: width
+uniform int  u_maxit;      // maximum number of iterations
+
+int quick_checks(float x, float y)
+{
+    // main cardioid
+    if ((x * x + y * y) * (8.0 * (x * x + y * y) - 3.0) + x < 3.0/32.0) {
+        return 1;
+    }
+
+    // period 2 component
+    if ((x + 1.0) * (x + 1.0) + y * y < 1.0/16.0) {
+        return 1;
+    }
+
+    return 0;
+}
+
+int iterate(vec2 c, out float dist, out vec2 q) {
+  if (quick_checks(c.x, c.y) != 0) {
+    return u_maxit;
+  }
+
+  //float R = 4.0;
+  float R = 256.0;
+
+  float x  = 0.0;
+  float y  = 0.0;
+  float dx = 1.0; // dz_n = d/dc z_n(c), dz_{n+1} = d/dc (z^2 + c) = 2 z dz + 1
+  float dy = 0.0;
+  float x2 = 0.0;
+  float y2 = 0.0;
+
+  int iter = 0;
+  for (int i = 0; i < 1000; ++i) {
+    if (i == u_maxit) {
+      iter = i;
+      break;
+    }
+    float dt = 2.0 * (x * dx - y * dy) + 1.0;
+    dy       = 2.0 * (y * dx + x * dy);
+    dx       = dt;
+    y        = 2.0 * x * y + c.y;
+    x        = x2 - y2 + c.x;
+    y2       = y*y;
+    x2       = x*x;
+    if (x2 + y2 > R) {
+      iter = i;
+      break;
+    }
+  }
+
+  float abs_z2 = x2 + y2;
+  float abs_dz2 = dx * dx + dy * dy;
+
+  dist = log(abs_z2) * sqrt(abs_z2 / abs_dz2);
+
+  // complex division - naive version
+  q.x = (x * dx + y * dy) / abs_dz2;
+  q.y = (y * dx - x * dy) / abs_dz2;
+
+  return iter;
+}
+
+float saturate(float x) {
+  return (x < 0.0) ? 0.0 : ((x > 1.0) ? 1.0 : x);
+}
+
+vec4 distest(vec2 c, float scale) {
+  float dist;
+  vec2 q;
+  int i = iterate(c, dist, q);
+
+  if (i == u_maxit)
+    return vec4(0.0, 0.0, 0.0, 1.0);
+
+#if 0
+  float angle = 45.0 * (2.0 * 3.1415 / 360.0);
+  float h2 = 2.0;
+  vec3 v = vec3(cos(angle), sin(angle), h2);
+  vec3 u = vec3(q / length(q), 1.0);
+  float t = dot(u, v) / (1.0 + h2);
+#else
+  float t = pow(scale * dist, 0.3);
+#endif
+
+  vec4 color1 = vec4(1.0, 0.0, 0.0, 1.0); // boundary color
+  vec4 color2 = vec4(1.0, 0.8, 0.0, 1.0);
+
+  return mix(color1, color2, saturate(t));
+}
+
+void main() {
+  float delta = u_plane.z / u_image_size.x;
+  float scale = 1.0 / delta;
+
+  vec2 c = u_plane.xy + delta * (gl_FragCoord.xy - 0.5 * u_image_size);
+
+  gl_FragColor = distest(c, scale);
+}
+</script>
+</head>
+
+<body>
+  <canvas id="render-target" width="800" height="800">hello</canvas>
+  <script type="text/javascript">
+    'use strict';
+
+    let canvas = document.getElementById("render-target");
+    let gl = canvas.getContext("webgl");
+    console.log("GL version:  " + gl.getParameter(gl.VERSION));
+    console.log("GL renderer: " + gl.getParameter(gl.RENDERER));
+    console.log("GL vendor:   " + gl.getParameter(gl.VENDOR));
+
+    let image = {
+      width:  canvas.clientWidth,
+      height: canvas.clientHeight,
+    };
+    let mouse = {
+      x: 0, // current position
+      y: 0,
+      buttons: {
+        left:  false, // (primary)
+        right: false, // (secondary)
+      },
+      last: {x: 0, y: 0}, // mouse position of last frame
+      down: {x: 0, y: 0}, // mouse position of last onmousedown event
+    };
+    let plane = {
+      x: -0.75,
+      y:  0.0,
+      w:  3.0,
+    };
+    let maxit = 500;
+    let last_render_time = 0;
+
+    let CreateShaderFromSource = function(type, source) {
+      let shader = gl.createShader(type);
+
+      gl.shaderSource(shader, source);
+
+      gl.compileShader(shader);
+      if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+        let message = 'ERROR:\ncould not compile shader:\n\n' + gl.getShaderInfoLog(shader);
+        gl.deleteShader(shader);
+        throw message;
+      }
+
+      return shader;
+    };
+
+    let DeleteShaders = function(shaders) {
+      for (let shader of shaders) {
+        gl.deleteShader(shader);
+      }
+    };
+
+    let CreateProgramFromShaders = function(shaders) {
+      let program = gl.createProgram();
+
+      for (let shader of shaders) {
+        gl.attachShader(program, shader);
+      }
+
+      gl.linkProgram(program);
+      if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+        let message = 'ERROR:\ncould not link program:\n\n' + gl.getProgramInfoLog(program);
+        gl.deleteProgram(program);
+        throw message;
+      }
+
+      return program;
+    };
+
+    let LoadProgramAndBuffers = function() {
+      let shaders = [
+        CreateShaderFromSource(gl.VERTEX_SHADER,   document.getElementById("vert-shader").text),
+        CreateShaderFromSource(gl.FRAGMENT_SHADER, document.getElementById("frag-shader").text),
+      ];
+
+      let program = CreateProgramFromShaders(shaders);
+
+      DeleteShaders(shaders);
+
+      gl.useProgram(program);
+
+      let vertex_buffer = gl.createBuffer(gl.ARRAY_BUFFER);
+      gl.bindBuffer(gl.ARRAY_BUFFER, vertex_buffer);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+
+      let a_pos = gl.getAttribLocation(program, "a_pos");
+      gl.vertexAttribPointer(a_pos, 2, gl.FLOAT, false, 0, 0);
+      gl.enableVertexAttribArray(a_pos);
+
+      return program;
+    };
+
+    let program = LoadProgramAndBuffers();
+
+    let u_image_size = gl.getUniformLocation(program, "u_image_size");
+    let u_plane      = gl.getUniformLocation(program, "u_plane");
+    let u_maxit      = gl.getUniformLocation(program, "u_maxit");
+
+    let UpdateScene = function(dt) {
+      let delta = plane.w / image.width;
+
+      if (mouse.buttons.left) {
+        plane.x += delta * (mouse.last.x - mouse.x);
+        plane.y -= delta * (mouse.last.y - mouse.y);
+      }
+
+      if (mouse.buttons.right) {
+        let scale = 4.0 * dt;
+        plane.w += delta * (mouse.down.y - mouse.last.y) * scale;
+      }
+
+      mouse.last.x = mouse.x;
+      mouse.last.y = mouse.y;
+    };
+
+    let Render = function() {
+      let now = Date.now();
+      let dt = (now - last_render_time) / 1000.0; // in seconds!
+      last_render_time = now;
+
+      UpdateScene(dt);
+
+      gl.uniform2f(u_image_size, image.width, image.height);
+      gl.uniform3f(u_plane, plane.x, plane.y, plane.w);
+      gl.uniform1i(u_maxit, maxit);
+
+      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+      if (mouse.buttons.left || mouse.buttons.right) {
+        window.requestAnimationFrame(Render);
+      }
+    };
+
+    canvas.onmousedown = function(e) {
+      mouse.x = e.offsetX;
+      mouse.y = e.offsetY;
+      mouse.down.x = mouse.x;
+      mouse.down.y = mouse.y;
+      mouse.last.x = mouse.x;
+      mouse.last.y = mouse.y;
+
+      mouse.buttons.left  = ((e.buttons & 1) != 0);
+      mouse.buttons.right = ((e.buttons & 2) != 0);
+
+      window.requestAnimationFrame(Render);
+
+      return true;
+    };
+
+    canvas.onmouseup = function(e) {
+      mouse.buttons.left  = ((e.buttons & 1) != 0);
+      mouse.buttons.right = ((e.buttons & 2) != 0);
+
+      return true;
+    };
+
+    canvas.onmousemove = function(e) {
+      mouse.x = e.offsetX;
+      mouse.y = e.offsetY;
+
+      mouse.buttons.left  = ((e.buttons & 1) != 0);
+      mouse.buttons.right = ((e.buttons & 2) != 0);
+
+      return true;
+    };
+
+    canvas.oncontextmenu = function(e) {
+      return false;
+    };
+
+    document.onkeypress = function(e) {
+      switch (e.key) {
+      case 'h':
+      case 'H':
+        plane.x = -0.75;
+        plane.y =  0.0;
+        plane.w =  3.0;
+        window.requestAnimationFrame(Render);
+        break;
+      case 'p':
+      case 'P':
+        console.log('Plane ' + JSON.stringify(plane));
+        break;
+      }
+    };
+
+    last_render_time = Date.now();
+    Render();
+  </script>
+</body>
+
+</html>
